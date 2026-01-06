@@ -1,0 +1,80 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: envoy-proxy
+  namespace: microservices-stack
+  labels:
+    app: envoy-proxy
+    tier: proxy
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: envoy-proxy
+  template:
+    metadata:
+      labels:
+        app: envoy-proxy
+        tier: proxy
+    spec:
+      containers:
+      - name: envoy
+        image: envoyproxy/envoy:v1.29-latest
+        ports:
+        - containerPort: 8080
+          name: http
+        - containerPort: 9901
+          name: admin
+        command: ["envoy"]
+        args: ["-c", "/etc/envoy/envoy.yaml", "--service-cluster", "envoy-proxy"]
+        volumeMounts:
+        - name: envoy-config
+          mountPath: /etc/envoy
+          readOnly: true
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+        livenessProbe:
+          httpGet:
+            path: /stats
+            port: 9901
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /stats
+            port: 9901
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+      volumes:
+      - name: envoy-config
+        configMap:
+          name: envoy-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: envoy-proxy
+  namespace: microservices-stack
+  labels:
+    app: envoy-proxy
+    tier: proxy
+spec:
+  selector:
+    app: envoy-proxy
+  ports:
+  - port: 8080
+    targetPort: 8080
+    name: http
+  - port: 9901
+    targetPort: 9901
+    name: admin
+  type: LoadBalancer

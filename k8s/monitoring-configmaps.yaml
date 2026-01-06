@@ -1,0 +1,74 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-config
+  namespace: microservices-stack
+data:
+  prometheus.yaml: |
+    global:
+      scrape_interval: 10s
+      evaluation_interval: 10s
+
+    rule_files:
+      - payment-failure-alert.yaml
+
+    alerting:
+      alertmanagers:
+      - static_configs:
+        - targets: ['alertmanager:9093']
+
+    scrape_configs:
+      - job_name: 'fastapi-users-service'
+        static_configs:
+          - targets: ['users-service:8000']
+        metrics_path: '/metrics'
+        scrape_interval: 10s
+      - job_name: 'fastapi-orders-service'
+        static_configs:
+          - targets: ['orders-service:8001']
+        metrics_path: '/metrics'
+        scrape_interval: 10s
+      - job_name: 'prometheus'
+        static_configs:
+          - targets: ['localhost:9090']
+      - job_name: 'grafana'
+        static_configs:
+          - targets: ['grafana:3000']
+        metrics_path: '/metrics'
+      - job_name: 'cadvisor'
+        static_configs:
+          - targets: ['cadvisor:8080']
+      - job_name: 'node-exporter'
+        static_configs:
+          - targets: ['node-exporter:9100']
+  payment-failure-alert.yaml: |
+    groups:
+    - name: payment_alerts
+      rules:
+      - alert: PaymentFailureHigh
+        expr: payment_failures_total > 10
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High payment failure rate detected"
+          description: "Payment failures have exceeded threshold of 10 in the last 2 minutes."
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: alertmanager-config
+  namespace: microservices-stack
+data:
+  alertmanager.yaml: |
+    route:
+      group_by: ['alertname', 'job']
+      group_wait: 30s
+      group_interval: 5m
+      repeat_interval: 3h
+      receiver: discord
+
+    receivers:
+    - name: discord
+      discord_configs:
+      - webhook_url: <discord_channel_webhook_url>

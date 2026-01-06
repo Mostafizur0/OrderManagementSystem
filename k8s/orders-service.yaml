@@ -1,0 +1,93 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: orders-service-config
+  namespace: microservices-stack
+data:
+  DATABASE_URL: "postgresql://fastapi_user:fastapi_password@postgres:5432/fastapi_db"
+  LOGGER_NAME: "orders-service"
+  LOGGER_PATH: "/app/logs/orders-service.log"
+  METRICS_UPDATE_INTERVAL: "5"
+  APP_NAME: "Orders Service"
+  USERS_SERVICE_URL: "http://users-service:8000/api"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: orders-service
+  namespace: microservices-stack
+  labels:
+    app: orders-service
+    tier: application
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: orders-service
+  template:
+    metadata:
+      labels:
+        app: orders-service
+        tier: application
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8001"
+        prometheus.io/path: "/metrics"
+    spec:
+      containers:
+      - name: orders-service
+        image: orders-service:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8001
+          name: http
+        envFrom:
+        - configMapRef:
+            name: orders-service-config
+        command: ["/app/start.sh"]
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8001
+          initialDelaySeconds: 60
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8001
+          initialDelaySeconds: 45
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 6
+        volumeMounts:
+        - name: logs
+          mountPath: /app/logs
+      volumes:
+      - name: logs
+        emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: orders-service
+  namespace: microservices-stack
+  labels:
+    app: orders-service
+    tier: application
+spec:
+  selector:
+    app: orders-service
+  ports:
+  - port: 8001
+    targetPort: 8001
+    name: http
+  type: ClusterIP

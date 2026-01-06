@@ -1,0 +1,223 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kong-config
+  namespace: microservices-stack
+data:
+  kong.yml: |
+    _format_version: "3.0"
+    services:
+      - name: auth-service
+        url: http://users-service:8000
+        routes:
+          - name: auth-route
+            paths:
+              - /api/v1/auth
+            strip_path: false
+            preserve_host: false
+          - name: auth-health-route
+            paths:
+              - /auth/health
+            strip_path: true
+            preserve_host: false
+      - name: auth-health-service
+        url: http://users-service:8000
+        routes:
+          - name: auth-health-full-route
+            paths:
+              - /api/v1/auth/health
+            strip_path: true
+            preserve_host: false
+            plugins:
+              - name: request-transformer
+                config:
+                  replace:
+                    uri: /health
+      - name: orders-service
+        url: http://orders-service:8001
+        routes:
+          - name: orders-route
+            paths:
+              - /api/v1/orders
+            strip_path: false
+            preserve_host: false
+          - name: orders-health-route
+            paths:
+              - /orders/health
+            strip_path: true
+            preserve_host: false
+          - name: orders-docs-route
+            paths:
+              - /orders/docs
+            strip_path: true
+            preserve_host: false
+          - name: orders-openapi-route
+            paths:
+              - /orders/openapi.json
+            strip_path: true
+            preserve_host: false
+          - name: orders-redoc-route
+            paths:
+              - /orders/redoc
+            strip_path: true
+            preserve_host: false
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kong
+  namespace: microservices-stack
+  labels:
+    app: kong
+    tier: proxy
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: kong
+  template:
+    metadata:
+      labels:
+        app: kong
+        tier: proxy
+    spec:
+      containers:
+      - name: kong
+        image: kong:3.4
+        env:
+        - name: KONG_DATABASE
+          value: "off"
+        - name: KONG_DECLARATIVE_CONFIG
+          value: "/kong/kong.yml"
+        - name: KONG_PROXY_ACCESS_LOG
+          value: /dev/stdout
+        - name: KONG_ADMIN_ACCESS_LOG
+          value: /dev/stdout
+        - name: KONG_PROXY_ERROR_LOG
+          value: /dev/stderr
+        - name: KONG_ADMIN_ERROR_LOG
+          value: /dev/stderr
+        - name: KONG_ADMIN_LISTEN
+          value: "0.0.0.0:8001"
+        - name: KONG_PROXY_LISTEN
+          value: "0.0.0.0:8000"
+        - name: KONG_ADMIN_GUI_LISTEN
+          value: "0.0.0.0:8002"
+        - name: KONG_ADMIN_GUI_URL
+          value: "http://localhost:8002"
+        - name: KONG_ADMIN_API_URI
+          value: "http://localhost:8001"
+        - name: KONG_ADMIN_GUI_ACCESS_LOG
+          value: /dev/stdout
+        - name: KONG_ADMIN_GUI_ERROR_LOG
+          value: /dev/stderr
+        - name: KONG_NGINX_WORKER_PROCESSES
+          value: "2"
+        - name: KONG_NGINX_DAEMON
+          value: "off"
+        ports:
+        - containerPort: 8000
+          name: proxy
+          protocol: TCP
+        - containerPort: 8001
+          name: admin
+          protocol: TCP
+        - containerPort: 8002
+          name: admin-gui
+          protocol: TCP
+        - containerPort: 8443
+          name: proxy-ssl
+          protocol: TCP
+        - containerPort: 8444
+          name: admin-ssl
+          protocol: TCP
+        volumeMounts:
+        - name: kong-config
+          mountPath: /kong
+          readOnly: true
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /status
+            port: 8001
+          initialDelaySeconds: 60
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /status
+            port: 8001
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 6
+      volumes:
+      - name: kong-config
+        configMap:
+          name: kong-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kong-proxy
+  namespace: microservices-stack
+  labels:
+    app: kong
+    tier: proxy
+spec:
+  selector:
+    app: kong
+  ports:
+  - port: 8000
+    targetPort: 8000
+    protocol: TCP
+    name: proxy
+  - port: 8001
+    targetPort: 8001
+    protocol: TCP
+    name: admin
+  type: LoadBalancer
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kong-admin
+  namespace: microservices-stack
+  labels:
+    app: kong
+    tier: proxy
+spec:
+  selector:
+    app: kong
+  ports:
+  - port: 8001
+    targetPort: 8001
+    protocol: TCP
+    name: admin
+  type: ClusterIP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kong-manager
+  namespace: microservices-stack
+  labels:
+    app: kong
+    tier: proxy
+spec:
+  selector:
+    app: kong
+  ports:
+  - port: 8002
+    targetPort: 8002
+    protocol: TCP
+    name: admin-gui
+  type: LoadBalancer
+
