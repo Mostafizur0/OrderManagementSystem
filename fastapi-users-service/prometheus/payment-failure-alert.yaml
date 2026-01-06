@@ -1,0 +1,11 @@
+groups:
+  - name: fastapi-users-service
+    rules:
+      - alert: HighPaymentErrorRate
+        expr: rate(payment_errors_total[30m]) > 0
+        for: 10s
+        labels:
+          severity: critical
+        annotations:
+          summary: High payment error rate detected
+          description: "Payment error rate is above 0 in the last 10 seconds."

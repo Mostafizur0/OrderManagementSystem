@@ -1,0 +1,60 @@
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests"]
+python_files = ["test_*.py", "*_test.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+filterwarnings = [
+    "ignore::DeprecationWarning",
+    "ignore::UserWarning",
+]
+addopts = [
+    "-v",
+    "--strict-markers",
+    "--tb=short",
+]
+markers = [
+    "unit: Unit tests (fast, isolated)",
+    "integration: Integration tests (may use database)",
+    "slow: Slow tests",
+]
+env = [
+    "DATABASE_URL=sqlite:///./test.db",
+    "JWT_SECRET_KEY=test-secret-key-for-testing-only",
+    "JWT_ALGORITHM=HS256",
+    "JWT_ACCESS_TOKEN_EXPIRE_MINUTES=30",
+    "JWT_REFRESH_TOKEN_EXPIRE_DAYS=7",
+]
+
+[tool.coverage.run]
+source = ["app"]
+branch = true
+omit = [
+    "*/tests/*",
+    "*/__pycache__/*",
+    "*/migrations/*",
+    "*/alembic/*",
+    "*/.venv/*",
+    "*/venv/*",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+    "if typing.TYPE_CHECKING:",
+    "@abstractmethod",
+]
+show_missing = true
+precision = 2
+fail_under = 70
+
+[tool.coverage.html]
+directory = "htmlcov"
+

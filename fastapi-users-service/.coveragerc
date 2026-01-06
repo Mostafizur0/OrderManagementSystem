@@ -1,0 +1,32 @@
+# Coverage configuration
+# Primary config is in pyproject.toml, this file is for tools that don't support pyproject.toml
+
+[run]
+source = app
+branch = True
+omit =
+    */tests/*
+    */__pycache__/*
+    */migrations/*
+    */alembic/*
+    */.venv/*
+    */venv/*
+
+[report]
+exclude_lines =
+    pragma: no cover
+    def __repr__
+    raise AssertionError
+    raise NotImplementedError
+    if __name__ == .__main__.:
+    if TYPE_CHECKING:
+    if typing.TYPE_CHECKING:
+    @abstractmethod
+
+show_missing = True
+precision = 2
+fail_under = 70
+
+[html]
+directory = htmlcov
+

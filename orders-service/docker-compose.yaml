@@ -1,0 +1,89 @@
+volumes:
+  prometheus-data:
+    driver: local
+  grafana-data:
+    driver: local
+  alertmanager-data:
+    driver: local
+
+services:
+  postgres:
+    image: postgres:14
+    container_name: postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: fastapi_user
+      POSTGRES_PASSWORD: fastapi_password
+      POSTGRES_DB: fastapi_db
+    restart: unless-stopped
+  fastapi_users_service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: fastapi_users_service
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    command: python main.py
+  prometheus:
+    image: prom/prometheus
+    container_name: prometheus
+    ports:
+      - 9090:9090
+    command: "--config.file=/etc/prometheus/prometheus.yaml"
+    volumes:
+      - ./prometheus/prometheus.yaml:/etc/prometheus/prometheus.yaml:ro
+      - ./prometheus/payment-failure-alert.yaml:/etc/prometheus/payment-failure-alert.yaml:ro
+      - prometheus-data:/prometheus
+    restart: unless-stopped
+  
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:latest
+    container_name: cadvisor
+    ports:
+      - 8089:8080
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:rw
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+
+  node-exporter:
+    image: prom/node-exporter:latest
+    container_name: node-exporter
+    ports:
+      - 9100:9100
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.sysfs=/host/sys'
+      - '--collector.filesystem.ignored-mount-points="^/(sys|proc|dev|host|etc)($$|/)"'
+
+  grafana:
+    image: docker.io/grafana/grafana-oss
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana-data:/var/lib/grafana
+    restart: unless-stopped
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
+  
+  alertmanager:
+    image: prom/alertmanager:latest
+    restart: unless-stopped
+    container_name: alertmgr
+    ports:
+      - "9093:9093"
+    volumes:
+      - ./prometheus/alertmanager.yaml:/etc/prometheus/alertmanager.yaml:ro
+      - alertmanager-data:/data
+    command: --config.file=/etc/prometheus/alertmanager.yaml --log.level=debug
